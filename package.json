@@ -1,0 +1,32 @@
+{
+  "name": "besubenchmarking",
+  "version": "1.0.0",
+  "description": "Ferramenta automatizada de benchmark de smart contracts para diferentes redes besu locais",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@rocketseat/eslint-config": "^2.2.2",
+    "eslint": "^8.57.0",
+    "hardhat": "^2.22.16"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.4.0",
+    "dotenv": "^16.4.5",
+    "@hyperledger/caliper-cli": "^0.5.0",
+    "https-proxy-agent": "^7.0.5",
+    "web3": "^1.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/viniciusSt1/BesuBenchmarking.git"
+  },
+  "author": "Vinicius Stefanes",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/viniciusSt1/BesuBenchmarking/issues"
+  },
+  "homepage": "https://github.com/viniciusSt1/BesuBenchmarking#readme"
+}

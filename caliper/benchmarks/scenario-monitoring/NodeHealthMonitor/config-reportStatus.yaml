@@ -1,0 +1,64 @@
+simpleArgs: &simple-args
+  reportStatus:
+    [
+      "2",
+      "0xd49c718fabf7b90f17542e2e0989e3de8a2e1241c05d03e53abe6a1b2bdb197d",
+      "Problema Detectado",
+    ]
+  numberOfAccounts: &number-of-accounts 5
+  txNumber: &tx-number 10
+  timeOfTest: &time-of-test 20
+
+test:
+  name: NodeHealthMonitor Load Test
+  description: >-
+    Avalia o desempenho do contrato NodeHealthMonitor.
+  workers:
+    number: 1
+  rounds:
+    - label: reportStatus
+      description: >-
+        Envio massivo de status para monitorar throughput.
+      txNumber: *tx-number
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 1
+      workload:
+        module: benchmarks/scenario-monitoring/NodeHealthMonitor/reportStatus.js
+        arguments: *simple-args
+
+monitors:
+  resource:
+    - module: docker
+      options:
+        interval: 5
+        cpuUsageNormalization: true # Normalizes CPU usage values to a 0-100% range
+        containers:
+          - /node-besu1
+          - /node-besu2
+          - /node-besu3
+          - /node-besu4
+          - /node-besu5
+          - /node-besu6
+        stats:
+          memory:
+            max: true
+            avg: true
+          cpu:
+            max: true # Enable monitoring of max CPU usage
+            avg: true # Enable monitoring of average CPU usage
+          networkIO:
+            enabled: true # Enable monitoring of network I/O
+          diskIO:
+            enabled: true # Enable monitoring of disk I/O
+
+        charting:
+          bar:
+            metrics: [Memory(avg), CPU%(avg)]
+          polar:
+            metrics: [all]
+
+observer:
+  type: local
+  interval: 5
