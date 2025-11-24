@@ -8,6 +8,7 @@ besu/jdk-*/
 *.jfr
 besu/docker-compose.yml
 besu/Permissioned-Network/
+hostspot-pid-*/
 
 caliper/reports_csv/
 caliper/reports_htmls/

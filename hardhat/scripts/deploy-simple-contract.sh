@@ -24,8 +24,8 @@ log_error() {
 }
 
 # Diretórios
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HARDHAT_DIR="$BASE_DIR/../Hardhat-contracts"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HARDHAT_DIR="$BASE_DIR/hardhat"
 
 # Verificar se Hardhat existe
 if [ ! -d "$HARDHAT_DIR" ]; then
@@ -86,7 +86,7 @@ fi
 log_success "Contrato Simple implantado em: $CONTRACT_ADDRESS"
 
 # Atualizar networkconfig.json com novo endereço
-NETWORKCONFIG="$BASE_DIR/../Hyperleadger-Caliper/networks/besu/networkconfig.json"
+NETWORKCONFIG="$BASE_DIR/caliper/networks/besu/networkconfig.json"
 
 if [ ! -f "$NETWORKCONFIG" ]; then
     log_error "Arquivo networkconfig.json não encontrado em $NETWORKCONFIG"

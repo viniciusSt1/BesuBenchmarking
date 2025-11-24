@@ -84,13 +84,13 @@ log_info "Versao Besu: $VERSION"
 log_info "=========================================="
 
 # Diretórios
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BASE_DIR"
 
-BESU_DIR="$BASE_DIR/besu-$VERSION"
-NETWORK_FILES="$BASE_DIR/networkFiles"
-PERMISSIONED_NET="$BASE_DIR/Permissioned-Network"
-CALIPER_DIR="$BASE_DIR/../Hyperleadger-Caliper"
+BESU_DIR="$BASE_DIR/besu/besu-$VERSION"
+NETWORK_FILES="$BASE_DIR/besu/networkFiles"
+PERMISSIONED_NET="$BASE_DIR/besu/Permissioned-Network"
+CALIPER_DIR="$BASE_DIR/caliper"
 RESULTS_HTML="$CALIPER_DIR/reports_htmls/experiments/$EXP_NAME_WITH_TS"
 RESULTS_CSV="$CALIPER_DIR/reports_csv/experiments/$EXP_NAME_WITH_TS"
 
@@ -110,18 +110,18 @@ if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME" ]; then
     wget "$JAVA_URL" -O "$JAVA_TAR"
 
     log_info "Extraindo JDK..."
-    tar -xvf "$JAVA_TAR"
+    tar -xvf "$JAVA_TAR" -C "$PWD/besu"
     rm "$JAVA_TAR"
 
     # Detectar automaticamente a pasta extraída
-    JAVA_DIR=$(ls -d jdk-* | head -n 1)
+    JAVA_DIR=$(ls -d /besu/jdk-* | head -n 1)
 
     if [ ! -d "$JAVA_DIR" ]; then
         log_error "Falha ao identificar diretório do JDK após extração."
         exit 1
     fi
 
-    export JAVA_HOME="$PWD/$JAVA_DIR"
+    export JAVA_HOME="$JAVA_DIR"
     export PATH="$JAVA_HOME/bin:$PATH"
 
     log_success "JAVA_HOME configurado automaticamente:"
@@ -136,7 +136,7 @@ if [ ! -d "$BESU_DIR" ]; then
     log_warning "Baixando automaticamente..."
 
     # Executa o script de download passando a versão desejada
-    ./scripts/download-besu-versions.sh "$VERSION"
+    ./besu/scripts/download-besu-versions.sh "$VERSION"
 
     # Agora verificar novamente
     if [ ! -d "$BESU_DIR" ]; then
@@ -156,7 +156,7 @@ log_success "PATH atualizado para incluir $BESU_DIR/bin"
 # ==========================================
 
 log_info "Parando rede atual..."
-if [ -f "$BASE_DIR/docker-compose.yml" ]; then
+if [ -f "$BASE_DIR/besu/docker-compose.yml" ]; then
     cd "$BASE_DIR"
     docker-compose down 2>/dev/null || true
     log_success "Rede parada"
@@ -194,9 +194,9 @@ log_info "Preparando genesis para consenso $CONSENSUS..."
 
 # Selecionar template
 if [ "$CONSENSUS" = "qbft" ]; then
-    GENESIS_TEMPLATE="$BASE_DIR/genesis_QBFT.json"
+    GENESIS_TEMPLATE="$BASE_DIR/besu/genesis_QBFT.json"
 else
-    GENESIS_TEMPLATE="$BASE_DIR/genesis_IBFT.json"
+    GENESIS_TEMPLATE="$BASE_DIR/besu/genesis_IBFT.json"
 fi
 
 if [ ! -f "$GENESIS_TEMPLATE" ]; then
@@ -250,7 +250,7 @@ fi
 # Besu vai criar networkFiles/ do zero
 "$BESU_DIR/bin/besu" operator generate-blockchain-config \
     --config-file="$GENESIS_FINAL" \
-    --to=networkFiles \
+    --to=besu/networkFiles \
     --private-key-file-name=key 2>&1 | grep -v "^SLF4J" || true
 
 # Limpar arquivo temporario
@@ -263,7 +263,7 @@ log_success "Chaves geradas em $NETWORK_FILES/keys/"
 # ==========================================
 
 log_info "Executando generate-nodes-config.sh..."
-cd "$BASE_DIR"
+cd "$BASE_DIR/besu/scripts"
 bash ./generate-nodes-config.sh > /dev/null 2>&1
 
 if [ ! -d "$PERMISSIONED_NET/Node-1" ]; then
@@ -279,7 +279,8 @@ cp "$NETWORK_FILES/genesis.json" "$PERMISSIONED_NET/genesis.json"
 
 # Adicionar permissao para conta do Hardhat deploy
 log_info "Adicionando permissao para conta de deploy do Hardhat..."
-DEPLOY_ACCOUNT="0xfe3b557e8fb62b89f4916b721be55ceb828dbd73"  # lowercase para consistencia
+
+DEPLOY_ACCOUNT="0xfe3b557e8fb62b89f4916b721be55ceb828dbd73"  # < ------------------------ DEFINIR AQUI CONTA DE DEPLOY
 
 for node_dir in "$PERMISSIONED_NET"/Node-*; do
     if [ -d "$node_dir" ]; then
@@ -320,7 +321,7 @@ bash ./generate-docker-compose.sh > /dev/null 2>&1
 # Restaurar script original
 mv generate-docker-compose.sh.bak generate-docker-compose.sh
 
-if [ ! -f "$BASE_DIR/docker-compose.yml" ]; then
+if [ ! -f "$BASE_DIR/besu/docker-compose.yml" ]; then
     log_error "Falha ao gerar docker-compose.yml"
     exit 1
 fi
@@ -372,7 +373,7 @@ docker network create besu-network 2>/dev/null || log_warning "Rede besu-network
 # ==========================================
 
 log_info "Subindo rede com docker-compose..."
-cd "$BASE_DIR"
+cd "$BASE_DIR/besu"
 docker compose up -d
 
 log_success "Containers iniciados"
@@ -406,7 +407,7 @@ done
 # ==========================================
 
 log_info "Implantando contrato Simple na rede..."
-bash "$BASE_DIR/scripts/deploy-simple-contract.sh"
+bash "$BASE_DIR/hardhat/scripts/deploy-simple-contract.sh"
 
 if [ $? -ne 0 ]; then
     log_error "Falha ao implantar contrato Simple"
@@ -530,7 +531,7 @@ log_success "=========================================="
 
 # Parar rede para liberar recursos
 log_info "Parando rede para proximo experimento..."
-cd "$BASE_DIR"
+cd "$BASE_DIR/besu"
 docker compose down > /dev/null 2>&1
 
 log_success "Rede parada. Pronto para proximo experimento."

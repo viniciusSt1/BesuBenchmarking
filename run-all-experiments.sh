@@ -38,10 +38,9 @@ log_section() {
 }
 
 # Diretórios
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-EXPERIMENTS_FILE="$SCRIPT_DIR/experiments-list.txt"
-RUN_EXPERIMENT="$SCRIPT_DIR/run-experiment.sh"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXPERIMENTS_FILE="$BASE_DIR/experiments-list.txt"
+RUN_EXPERIMENT="$BASE_DIR/run-experiment.sh"
 
 # Verificar arquivos
 if [ ! -f "$EXPERIMENTS_FILE" ]; then

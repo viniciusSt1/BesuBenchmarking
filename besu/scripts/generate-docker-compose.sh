@@ -2,7 +2,7 @@
 set -e  # para o script se algo falhar
 
 # === CONFIGURAÇÕES ===
-BASE_DIR="$(pwd)"
+BASE_DIR="$(pwd)/.."
 OUTPUT_DIR="$BASE_DIR/Permissioned-Network"
 IMAGE_NAME="besu-image-local:25.10.0"
 NETWORK_NAME="besu-network"

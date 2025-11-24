@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # === CONFIGURÁVEIS ===
-BASE_DIR="$(pwd)"  # Diretório atual
+BASE_DIR="$(pwd)/../"  # Diretório atual
 GENESIS_DIR="$BASE_DIR/networkFiles/genesis.json"
 KEYS_DIR="$BASE_DIR/networkFiles/keys"
 OUTPUT_DIR="$BASE_DIR/Permissioned-Network"
