@@ -419,7 +419,28 @@ fi
 log_success "Contrato Simple implantado e networkconfig.json atualizado"
 
 # ==========================================
-# 13. EXECUTAR CALIPER
+# 13. ATUALIZAR YAMLS COM NUMERO DE NOS
+# ==========================================
+
+log_info "Atualizando arquivos YAML do Caliper para $NODES nos..."
+
+YAML_FILES=(
+    "$CALIPER_DIR/benchmarks/scenario-monitoring/Simple/config-open.yaml"
+    "$CALIPER_DIR/benchmarks/scenario-monitoring/Simple/config-query.yaml"
+    "$CALIPER_DIR/benchmarks/scenario-monitoring/Simple/config-transfer.yaml"
+)
+
+for YAML_FILE in "${YAML_FILES[@]}"; do
+    if [ -f "$YAML_FILE" ]; then
+        python3 "$CALIPER_DIR/update_yaml_nodes.py" "$YAML_FILE" "$NODES" > /dev/null 2>&1
+        log_info "  Atualizado: $(basename $YAML_FILE)"
+    fi
+done
+
+log_success "YAMLs atualizados para $NODES nos"
+
+# ==========================================
+# 14. EXECUTAR CALIPER
 # ==========================================
 
 log_info "Executando Caliper..."
@@ -473,22 +494,61 @@ done
 log_success "Caliper executado"
 
 # ==========================================
-# 14. EXTRAIR CSVs
+# 15. EXTRAIR CSVs
 # ==========================================
 
 log_info "Convertendo HTMLs para CSV..."
-python3 extract_csv.py 2>&1 | tail -3 || log_warning "Conversao CSV falhou"
 
-# Mover CSVs para diretorio do experimento
-if [ -d "reports_csv/open" ]; then
-    cp -r reports_csv/open/* "$RESULTS_CSV/" 2>/dev/null || true
-    cp -r reports_csv/query/* "$RESULTS_CSV/" 2>/dev/null || true
-    cp -r reports_csv/transfer/* "$RESULTS_CSV/" 2>/dev/null || true
+# Criar estrutura temporaria esperada pelo extract_csv.py
+mkdir -p reports_htmls/{open,query,transfer}
+
+# Copiar HTMLs para estrutura esperada
+for BENCHMARK in open query transfer; do
+    if [ -f "$RESULTS_HTML/${BENCHMARK}_report.html" ]; then
+        cp "$RESULTS_HTML/${BENCHMARK}_report.html" "reports_htmls/${BENCHMARK}/report.html"
+    fi
+done
+
+# Executar script de extracao
+python3 extract_csv.py 2>&1 | grep -v "^$" || log_warning "Conversao CSV falhou"
+
+# Mesclar e mover CSVs para diretorio do experimento
+if [ -d "reports_csv" ]; then
+    # Mesclar performance CSVs
+    PERF_FINAL="$RESULTS_CSV/caliper_performance_metrics.csv"
+    MON_FINAL="$RESULTS_CSV/caliper_monitor_metrics.csv"
+
+    # Criar header do performance
+    if [ -f "reports_csv/open/caliper_performance_metrics.csv" ]; then
+        head -1 "reports_csv/open/caliper_performance_metrics.csv" > "$PERF_FINAL"
+    fi
+
+    # Adicionar dados de cada benchmark
+    for BENCHMARK in open query transfer; do
+        if [ -f "reports_csv/${BENCHMARK}/caliper_performance_metrics.csv" ]; then
+            tail -n +2 "reports_csv/${BENCHMARK}/caliper_performance_metrics.csv" >> "$PERF_FINAL"
+        fi
+    done
+
+    # Criar header do monitor
+    if [ -f "reports_csv/open/caliper_monitor_metrics.csv" ]; then
+        head -1 "reports_csv/open/caliper_monitor_metrics.csv" > "$MON_FINAL"
+    fi
+
+    # Adicionar dados de cada benchmark (monitor eh o mesmo para todos, pegar apenas um)
+    if [ -f "reports_csv/transfer/caliper_monitor_metrics.csv" ]; then
+        tail -n +2 "reports_csv/transfer/caliper_monitor_metrics.csv" >> "$MON_FINAL"
+    fi
+
     log_success "CSVs salvos em $RESULTS_CSV/"
+
+    # Limpar estruturas temporarias
+    rm -rf reports_htmls/{open,query,transfer}
+    rm -rf reports_csv/{open,query,transfer}
 fi
 
 # ==========================================
-# 15. SALVAR LOG DO EXPERIMENTO
+# 16. SALVAR LOG DO EXPERIMENTO
 # ==========================================
 
 LOG_FILE="$RESULTS_HTML/experiment.log"
@@ -518,7 +578,7 @@ EOF
 log_success "Log do experimento salvo: $LOG_FILE"
 
 # ==========================================
-# 16. FINALIZAR
+# 17. FINALIZAR
 # ==========================================
 
 log_success "=========================================="
