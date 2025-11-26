@@ -2,8 +2,8 @@
 set -e  # para o script se algo falhar
 
 # === CONFIGURAÇÕES ===
-BASE_DIR="$(pwd)/.."
-OUTPUT_DIR="$BASE_DIR/Permissioned-Network"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+OUTPUT_DIR="$BASE_DIR/besu/Permissioned-Network"
 IMAGE_NAME="besu-image-local:25.10.0"
 NETWORK_NAME="besu-network"
 IP="127.0.0.1"
@@ -13,17 +13,17 @@ START_METRICS_PORT=9545
 START_P2P_PORT=30303
 
 # Arquivo final do docker-compose
-COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
+COMPOSE_FILE="$BASE_DIR/besu/docker-compose.yml"
 
 # === CONTA QUANTOS NÓS EXISTEM ===
 NUM_NODES=$(find "$OUTPUT_DIR" -maxdepth 1 -type d -name "Node-*" | wc -l)
 
 if [ "$NUM_NODES" -eq 0 ]; then
-  echo "❌ Nenhum nó encontrado em $OUTPUT_DIR. Execute primeiro o script de criação de nós."
+  echo "Nenhum no encontrado em $OUTPUT_DIR. Execute primeiro o script de criacao de nos."
   exit 1
 fi
 
-echo "🔧 Gerando docker-compose.yml para $NUM_NODES nós..."
+echo "Gerando docker-compose.yml para $NUM_NODES nos..."
 
 # === BUSCA AUTOMÁTICA DAS CHAVES PARA BOOTNODES ===
 BOOTNODE1_KEY_FILE="$OUTPUT_DIR/Node-1/data/key.pub"
@@ -36,12 +36,12 @@ if [[ -f "$BOOTNODE1_KEY_FILE" && -f "$BOOTNODE3_KEY_FILE" ]]; then
   BOOTNODE1_PORT=$START_P2P_PORT
   BOOTNODE2_PORT=$((START_P2P_PORT + 2))
   BOOTNODES="enode://$KEY1@$IP:$BOOTNODE1_PORT,enode://$KEY3@$IP:$BOOTNODE2_PORT"
-  echo "📡 Bootnodes detectados automaticamente:"
-  echo "   • Node-1 → $KEY1:$BOOTNODE1_PORT"
-  echo "   • Node-3 → $KEY3:$BOOTNODE2_PORT"
+  echo "Bootnodes detectados automaticamente:"
+  echo "  Node-1 -> $KEY1:$BOOTNODE1_PORT"
+  echo "  Node-3 -> $KEY3:$BOOTNODE2_PORT"
 else
-  echo "⚠️  Não foi possível encontrar as chaves de Node-1 e Node-3!"
-  echo "⚠️  Bootnodes serão deixados em branco."
+  echo "Nao foi possivel encontrar as chaves de Node-1 e Node-3"
+  echo "Bootnodes serao deixados em branco."
   BOOTNODES=""
 fi
 
@@ -60,9 +60,9 @@ for i in $(seq 1 "$NUM_NODES"); do
   P2P_PORT=$((START_P2P_PORT + i - 1))
 
   NODE_NAME="node-besu${i}"
-  NODE_PATH="./Permissioned-Network/Node-${i}/data"
+  NODE_PATH="$OUTPUT_DIR/Node-${i}/data"
 
-  echo "  🧱 Gerando config para $NODE_NAME (RPC: $RPC_HTTP_PORT, P2P: $P2P_PORT)..."
+  echo "  Gerando config para $NODE_NAME (RPC: $RPC_HTTP_PORT, P2P: $P2P_PORT)..."
 
   # O Node-1 não usa bootnodes; os demais sim
   if [ "$i" -eq 1 ] || [ -z "$BOOTNODES" ]; then
@@ -101,7 +101,7 @@ cat <<EOF >> "$COMPOSE_FILE"
       --permissions-accounts-config-file-enabled
       --permissions-nodes-config-file-enabled
     volumes:
-      - ./Permissioned-Network/genesis.json:/opt/besu/genesis.json
+      - ${OUTPUT_DIR}/genesis.json:/opt/besu/genesis.json
       - ${NODE_PATH}:/opt/besu/data
 
 EOF
@@ -115,4 +115,4 @@ networks:
     external: true
 EOF
 
-echo "✅ docker-compose.yml criado com sucesso em $COMPOSE_FILE"
+echo "docker-compose.yml criado com sucesso em $COMPOSE_FILE"

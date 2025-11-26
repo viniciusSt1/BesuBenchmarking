@@ -84,4 +84,4 @@ for test_type in os.listdir(REPORTS_DIR):
         monitor_df = monitor_df.sort_values("TPS")
         monitor_df.to_csv(os.path.join(output_subdir, "caliper_monitor_metrics.csv"), index=False)
 
-    print(f"✅ CSVs criados para '{test_type}' em {output_subdir}")
+    print(f"CSVs criados para '{test_type}' em {output_subdir}")

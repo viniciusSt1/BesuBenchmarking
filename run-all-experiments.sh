@@ -142,8 +142,9 @@ log_section "FIM DA EXECUCAO EM LOTE"
 # Sugerir analise
 log_info ""
 log_info "Proximos passos:"
-log_info "  1. Analisar resultados: cd ../Hyperleadger-Caliper && python3 analyze-all-experiments.py"
-log_info "  2. Verificar logs individuais em: reports_htmls/experiments/<exp_name>/experiment.log"
+log_info "  1. Verificar relatorios HTML em: caliper/reports_htmls/experiments/"
+log_info "  2. Analisar CSVs em: caliper/reports_csv/experiments/"
+log_info "  3. Verificar logs individuais: caliper/reports_htmls/experiments/<exp_name>/experiment.log"
 log_info ""
 
 if [ $FAILED -eq 0 ]; then

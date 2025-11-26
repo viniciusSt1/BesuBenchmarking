@@ -12,6 +12,9 @@ hostspot-pid-*/
 
 caliper/reports_csv/
 caliper/reports_htmls/
+__pycache__/
+*.pyc
+*.pyo
 
 hardhat/cache/
 hardhat/artifacts/

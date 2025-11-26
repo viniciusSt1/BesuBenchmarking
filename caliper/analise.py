@@ -1,23 +1,58 @@
 import os
+import sys
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Caminho base dos relatórios
-BASE_DIR = "./6nos5bps2510/reports_csv"
-FUNCTIONS = ["open", "query", "transfer"]
+# Diretório base de experimentos
+EXPERIMENTS_BASE = "reports_csv/experiments"
+
+# Determinar quais experimentos processar
+EXPERIMENTS_TO_PROCESS = []
+
+if len(sys.argv) > 1:
+    user_input = sys.argv[1]
+
+    # Se o usuário passou um caminho completo, usar diretamente
+    if os.path.isdir(user_input):
+        EXPERIMENTS_TO_PROCESS = [user_input]
+    # Se passou apenas o nome do experimento, procurar em experiments/
+    elif os.path.isdir(os.path.join(EXPERIMENTS_BASE, user_input)):
+        EXPERIMENTS_TO_PROCESS = [os.path.join(EXPERIMENTS_BASE, user_input)]
+    else:
+        print(f"Experimento nao encontrado: {user_input}")
+        print(f"\nExperimentos disponiveis:")
+        if os.path.isdir(EXPERIMENTS_BASE):
+            exps = sorted(os.listdir(EXPERIMENTS_BASE))
+            for exp in exps:
+                if os.path.isdir(os.path.join(EXPERIMENTS_BASE, exp)):
+                    print(f"  - {exp}")
+        sys.exit(1)
+else:
+    # Sem argumentos: processar todos os experimentos
+    if os.path.isdir(EXPERIMENTS_BASE):
+        exps = sorted(os.listdir(EXPERIMENTS_BASE))
+        for exp in exps:
+            exp_path = os.path.join(EXPERIMENTS_BASE, exp)
+            if os.path.isdir(exp_path):
+                EXPERIMENTS_TO_PROCESS.append(exp_path)
+
+    if not EXPERIMENTS_TO_PROCESS:
+        print("Nenhum experimento encontrado em", EXPERIMENTS_BASE)
+        sys.exit(1)
+
+    print(f"Analisando {len(EXPERIMENTS_TO_PROCESS)} experimentos...\n")
 
 # =====================
-# Função para processar uma pasta
+# Função para processar um experimento
 # =====================
-def process_function(func_name):
-    print(f"\n🔍 Processando função: {func_name.upper()}")
-    report_dir = os.path.join(BASE_DIR, func_name)
-    perf_csv = os.path.join(report_dir, "caliper_performance_metrics.csv")
-    mon_csv = os.path.join(report_dir, "caliper_monitor_metrics.csv")
+def process_experiment(BASE_DIR):
+    perf_csv = os.path.join(BASE_DIR, "caliper_performance_metrics.csv")
+    mon_csv = os.path.join(BASE_DIR, "caliper_monitor_metrics.csv")
 
     # Verifica se ambos os arquivos existem
     if not (os.path.exists(perf_csv) and os.path.exists(mon_csv)):
-        print(f"⚠️ Arquivos CSV não encontrados em {report_dir}, pulando...\n")
+        print(f"Arquivos CSV nao encontrados em {BASE_DIR}")
+        print(f"Esperado: {perf_csv} e {mon_csv}")
         return
 
     # -------------------
@@ -55,76 +90,52 @@ def process_function(func_name):
     elif mem_col_mb in mon_df.columns and mon_df[mem_col_mb].notna().sum() > 0:
         mon_df["Memory_used_GB"] = mon_df[mem_col_mb] / 1024
     else:
-        print("⚠️ Nenhuma coluna de memória válida encontrada, pulando...\n")
+        print("Nenhuma coluna de memoria valida encontrada, pulando...\n")
         return
 
     # -------------------
-    # 2. Agrupar por TPS e calcular médias
+    # 2. Processar por função (Name)
     # -------------------
-    perf_grouped = (
-        perf_df.groupby("TPS")[["Send Rate (TPS)", "Min Latency (s)", "Avg Latency (s)", "Max Latency (s)", "Throughput (TPS)"]]
-        .mean()
-        .reset_index()
-    )
+    print(f"\n{'='*60}")
+    print(f"Experimento: {os.path.basename(BASE_DIR)}")
+    print(f"{'='*60}\n")
 
-    mon_grouped = (
-        mon_df.groupby("TPS")[["Memory_used_GB", cpu_col]]
-        .mean()
-        .reset_index()
-    )
+    # Processar cada função (open, query, transfer)
+    for func_name in perf_df['Name'].unique():
+        print(f"\nFuncao: {func_name.upper()}")
+        print("-" * 40)
 
-    # Junta tudo em uma tabela resumo
-    summary = pd.merge(perf_grouped, mon_grouped, on="TPS", how="inner")
+        # Filtrar dados dessa função
+        perf_func = perf_df[perf_df['Name'] == func_name]
 
-    # -------------------
-    # 3. Mostrar tabela na tela
-    # -------------------
-    print("\n📊 Tabela de médias por TPS:")
-    print(summary.to_string(index=False, float_format=lambda x: f"{x:,.4f}"))
+        if len(perf_func) == 0:
+            print(f"Sem dados para {func_name}")
+            continue
 
-    # -------------------
-    # 4. Gráficos
-    # -------------------
-    plt.figure(figsize=(10, 6))
-    plt.plot(summary["TPS"], summary["Avg Latency (s)"], marker="o", label="Latência Média")
-    plt.plot(summary["TPS"], summary["Max Latency (s)"], marker="o", linestyle="--", label="Latência Máxima")
-    plt.plot(summary["TPS"], summary["Min Latency (s)"], marker="o", linestyle="--", label="Latência Mínima")
-    plt.title(f"{func_name.upper()} - TPS × Latências (s)")
-    plt.xlabel("TPS")
-    plt.ylabel("Tempo (s)")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+        # Mostrar métricas de performance
+        print("\nPerformance:")
+        for col in ["Send Rate (TPS)", "Throughput (TPS)", "Min Latency (s)", "Avg Latency (s)", "Max Latency (s)"]:
+            if col in perf_func.columns:
+                val = perf_func[col].iloc[0]
+                print(f"  {col}: {val:.4f}")
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(summary["TPS"], summary["Send Rate (TPS)"], marker="o", color="orange", label="Send Rate (TPS)")
-    plt.plot(summary["TPS"], summary["Throughput (TPS)"], marker="o", color="green", label="Throughput (TPS)")
-    plt.title(f"{func_name.upper()} - TPS × Send Rate / Throughput")
-    plt.xlabel("TPS")
-    plt.ylabel("TPS")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+        # Mostrar métricas de recursos
+        print("\nRecursos (media entre nodes):")
+        print(f"  CPU media: {mon_df[cpu_col].mean():.2f}%")
+        print(f"  CPU maxima: {mon_df[cpu_col].max():.2f}%")
+        print(f"  Memoria media: {mon_df['Memory_used_GB'].mean():.4f} GB")
+        print(f"  Memoria maxima: {mon_df['Memory_used_GB'].max():.4f} GB")
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(summary["TPS"], summary[cpu_col], marker="o", color="red")
-    plt.title(f"{func_name.upper()} - TPS × CPU Média (%)")
-    plt.xlabel("TPS")
-    plt.ylabel("CPU Média (%)")
-    plt.grid(True)
-    plt.show()
-
-    plt.figure(figsize=(10, 6))
-    plt.plot(summary["TPS"], summary["Memory_used_GB"], marker="o", color="purple")
-    plt.title(f"{func_name.upper()} - TPS × Memória Média (GB)")
-    plt.xlabel("TPS")
-    plt.ylabel("Memória Média (GB)")
-    plt.grid(True)
-    plt.show()
+        # Mostrar por nó
+        print(f"\nPor no:")
+        for _, row in mon_df.iterrows():
+            print(f"  {row['Name']}: CPU={row[cpu_col]:.2f}%, Mem={row['Memory_used_GB']:.4f}GB")
 
 # =====================
 # Execução principal
 # =====================
 if __name__ == "__main__":
-    for func in FUNCTIONS:
-        process_function(func)
+    for exp_path in EXPERIMENTS_TO_PROCESS:
+        process_experiment(exp_path)
+        if len(EXPERIMENTS_TO_PROCESS) > 1:
+            print("\n" + "="*60 + "\n")

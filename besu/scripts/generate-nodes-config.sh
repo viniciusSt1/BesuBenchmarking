@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # === CONFIGURÁVEIS ===
-BASE_DIR="$(pwd)/../"  # Diretório atual
-GENESIS_DIR="$BASE_DIR/networkFiles/genesis.json"
-KEYS_DIR="$BASE_DIR/networkFiles/keys"
-OUTPUT_DIR="$BASE_DIR/Permissioned-Network"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"  # Diretório raiz do projeto
+GENESIS_DIR="$BASE_DIR/besu/networkFiles/genesis.json"
+KEYS_DIR="$BASE_DIR/besu/networkFiles/keys"
+OUTPUT_DIR="$BASE_DIR/besu/Permissioned-Network"
 IP="127.0.0.1" # <<<<<<<< Edite o IP aqui
 START_PORT=30303
 
