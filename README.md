@@ -14,7 +14,6 @@ Clone o repositorio e instale as dependencias:
 git clone https://github.com/viniciusSt1/BesuBenchmarking.git
 cd BesuBenchmarking
 npm install
-cd hardhat && npm install && cd ..
 ```
 
 ## Uso
