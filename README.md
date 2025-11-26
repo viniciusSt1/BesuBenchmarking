@@ -1,5 +1,6 @@
 ## Requisitos
 
+- Ambiente Linux
 - Node.js 18+ (recomendado 20+)
 - Docker e Docker Compose
 - Python 3.8+

@@ -4,9 +4,9 @@ import pandas as pd
 from bs4 import BeautifulSoup
 
 # Caminho da pasta com os relatórios HTML
-REPORTS_DIR = "./reports_htmls"
+REPORTS_DIR = "./reports_htmls/experiments"
 # Pasta de saída para os CSVs gerados
-OUTPUT_DIR = "./reports_csv"
+OUTPUT_DIR = "./reports_csv/experiments"
 
 # Cria a pasta base de saída, se não existir
 os.makedirs(OUTPUT_DIR, exist_ok=True)

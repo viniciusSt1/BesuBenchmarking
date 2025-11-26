@@ -45,25 +45,25 @@ BLOCKTIME=$2
 CONSENSUS=$3
 VERSION=$4
 
-# Validar nodes (4, 6, 8, 10)
+# Validar nodes (4, 6, 8, 10) ---> ajustar caso necessário
 if [[ ! "$NODES" =~ ^(4|6|8|10)$ ]]; then
     log_error "Numero de nos invalido: $NODES. Use: 4, 6, 8 ou 10"
     exit 1
 fi
 
-# Validar blocktime (2, 5, 10)
+# Validar blocktime (2, 5, 10) ---> ajustar caso necessário
 if [[ ! "$BLOCKTIME" =~ ^(2|5|10)$ ]]; then
     log_error "Tempo de bloco invalido: $BLOCKTIME. Use: 2, 5 ou 10"
     exit 1
 fi
 
-# Validar consensus (qbft, ibft)
+# Validar consensus (qbft, ibft) ---> ajustar caso necessário
 if [[ ! "$CONSENSUS" =~ ^(qbft|ibft)$ ]]; then
     log_error "Consenso invalido: $CONSENSUS. Use: qbft ou ibft"
     exit 1
 fi
 
-# Validar version
+# Validar version ---> ajustar caso necessário
 if [[ ! "$VERSION" =~ ^(24\.7\.0|25\.9\.0|25\.10\.0)$ ]]; then
     log_error "Versao invalida: $VERSION. Use: 24.7.0, 25.9.0 ou 25.10.0"
     exit 1
@@ -103,29 +103,44 @@ log_info "Verificando JAVA_HOME..."
 if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME" ]; then
     log_warning "JAVA_HOME não configurado ou diretório não existe."
 
-    JAVA_TAR="jdk-latest.tar.gz"
-    JAVA_URL="https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.tar.gz"
+    # Detectar se já existe um JDK instalado em besu/
+    EXISTING_JAVA_DIR=$(ls -d "$PWD"/besu/jdk-* 2>/dev/null | head -n 1)
 
-    log_info "Baixando JDK (latest)..."
-    wget "$JAVA_URL" -O "$JAVA_TAR"
+    if [ -n "$EXISTING_JAVA_DIR" ]; then
+        # Já existe JDK extraído
+        export JAVA_HOME="$EXISTING_JAVA_DIR"
+        export PATH="$JAVA_HOME/bin:$PATH"
 
-    log_info "Extraindo JDK..."
-    tar -xvf "$JAVA_TAR" -C "$PWD/besu"
-    rm "$JAVA_TAR"
+        log_success "JDK já encontrado em:"
+        log_success "  $JAVA_HOME"
+    else
+        # Não existe JDK → precisa baixar
+        log_warning "JAVA_HOME não configurado e nenhum JDK encontrado em ./besu"
 
-    # Detectar automaticamente a pasta extraída
-    JAVA_DIR=$(ls -d /besu/jdk-* | head -n 1)
+        JAVA_TAR="jdk-latest.tar.gz"
+        JAVA_URL="https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.tar.gz"
 
-    if [ ! -d "$JAVA_DIR" ]; then
-        log_error "Falha ao identificar diretório do JDK após extração."
-        exit 1
+        log_info "Baixando JDK (latest)..."
+        wget "$JAVA_URL" -O "$JAVA_TAR"
+
+        log_info "Extraindo JDK..."
+        tar -xvf "$JAVA_TAR" -C "$PWD/besu"
+        rm "$JAVA_TAR"
+
+        # Detectar automaticamente a pasta extraída
+        JAVA_DIR=$(ls -d "$PWD"/besu/jdk-* | head -n 1)
+
+        if [ ! -d "$JAVA_DIR" ]; then
+            log_error "Falha ao identificar diretório do JDK após extração."
+            exit 1
+        fi
+
+        export JAVA_HOME="$JAVA_DIR"
+        export PATH="$JAVA_HOME/bin:$PATH"
+
+        log_success "JAVA_HOME configurado automaticamente:"
+        log_success "  $JAVA_HOME"
     fi
-
-    export JAVA_HOME="$JAVA_DIR"
-    export PATH="$JAVA_HOME/bin:$PATH"
-
-    log_success "JAVA_HOME configurado automaticamente:"
-    log_success "  $JAVA_HOME"
 else
     log_success "JAVA_HOME já configurado: $JAVA_HOME"
 fi
@@ -497,55 +512,8 @@ log_success "Caliper executado"
 # 15. EXTRAIR CSVs
 # ==========================================
 
-log_info "Convertendo HTMLs para CSV..."
-
-# Criar estrutura temporaria esperada pelo extract_csv.py
-mkdir -p reports_htmls/{open,query,transfer}
-
-# Copiar HTMLs para estrutura esperada
-for BENCHMARK in open query transfer; do
-    if [ -f "$RESULTS_HTML/${BENCHMARK}_report.html" ]; then
-        cp "$RESULTS_HTML/${BENCHMARK}_report.html" "reports_htmls/${BENCHMARK}/report.html"
-    fi
-done
-
-# Executar script de extracao
+# Executar script de extracao (refatorar para extrair apenas os CSV desse experimento, manter script extract todos os exterimentos)
 python3 extract_csv.py 2>&1 | grep -v "^$" || log_warning "Conversao CSV falhou"
-
-# Mesclar e mover CSVs para diretorio do experimento
-if [ -d "reports_csv" ]; then
-    # Mesclar performance CSVs
-    PERF_FINAL="$RESULTS_CSV/caliper_performance_metrics.csv"
-    MON_FINAL="$RESULTS_CSV/caliper_monitor_metrics.csv"
-
-    # Criar header do performance
-    if [ -f "reports_csv/open/caliper_performance_metrics.csv" ]; then
-        head -1 "reports_csv/open/caliper_performance_metrics.csv" > "$PERF_FINAL"
-    fi
-
-    # Adicionar dados de cada benchmark
-    for BENCHMARK in open query transfer; do
-        if [ -f "reports_csv/${BENCHMARK}/caliper_performance_metrics.csv" ]; then
-            tail -n +2 "reports_csv/${BENCHMARK}/caliper_performance_metrics.csv" >> "$PERF_FINAL"
-        fi
-    done
-
-    # Criar header do monitor
-    if [ -f "reports_csv/open/caliper_monitor_metrics.csv" ]; then
-        head -1 "reports_csv/open/caliper_monitor_metrics.csv" > "$MON_FINAL"
-    fi
-
-    # Adicionar dados de cada benchmark (monitor eh o mesmo para todos, pegar apenas um)
-    if [ -f "reports_csv/transfer/caliper_monitor_metrics.csv" ]; then
-        tail -n +2 "reports_csv/transfer/caliper_monitor_metrics.csv" >> "$MON_FINAL"
-    fi
-
-    log_success "CSVs salvos em $RESULTS_CSV/"
-
-    # Limpar estruturas temporarias
-    rm -rf reports_htmls/{open,query,transfer}
-    rm -rf reports_csv/{open,query,transfer}
-fi
 
 # ==========================================
 # 16. SALVAR LOG DO EXPERIMENTO
