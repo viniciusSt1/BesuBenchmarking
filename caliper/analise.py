@@ -3,139 +3,181 @@ import sys
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Diretório base de experimentos
 EXPERIMENTS_BASE = "reports_csv/experiments"
+OUTPUT_DIR = "analysis_results"
 
-# Determinar quais experimentos processar
-EXPERIMENTS_TO_PROCESS = []
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-if len(sys.argv) > 1:
-    user_input = sys.argv[1]
-
-    # Se o usuário passou um caminho completo, usar diretamente
-    if os.path.isdir(user_input):
-        EXPERIMENTS_TO_PROCESS = [user_input]
-    # Se passou apenas o nome do experimento, procurar em experiments/
-    elif os.path.isdir(os.path.join(EXPERIMENTS_BASE, user_input)):
-        EXPERIMENTS_TO_PROCESS = [os.path.join(EXPERIMENTS_BASE, user_input)]
-    else:
-        print(f"Experimento nao encontrado: {user_input}")
-        print(f"\nExperimentos disponiveis:")
-        if os.path.isdir(EXPERIMENTS_BASE):
-            exps = sorted(os.listdir(EXPERIMENTS_BASE))
-            for exp in exps:
-                if os.path.isdir(os.path.join(EXPERIMENTS_BASE, exp)):
-                    print(f"  - {exp}")
-        sys.exit(1)
-else:
-    # Sem argumentos: processar todos os experimentos
-    if os.path.isdir(EXPERIMENTS_BASE):
-        exps = sorted(os.listdir(EXPERIMENTS_BASE))
-        for exp in exps:
-            exp_path = os.path.join(EXPERIMENTS_BASE, exp)
-            if os.path.isdir(exp_path):
-                EXPERIMENTS_TO_PROCESS.append(exp_path)
-
-    if not EXPERIMENTS_TO_PROCESS:
-        print("Nenhum experimento encontrado em", EXPERIMENTS_BASE)
-        sys.exit(1)
-
-    print(f"Analisando {len(EXPERIMENTS_TO_PROCESS)} experimentos...\n")
+FUNCTIONS = ["open", "query", "transfer"]
 
 # =====================
-# Função para processar um experimento
+# Funções auxiliares
 # =====================
-def process_experiment(BASE_DIR):
-    perf_csv = os.path.join(BASE_DIR, "caliper_performance_metrics.csv")
-    mon_csv = os.path.join(BASE_DIR, "caliper_monitor_metrics.csv")
 
-    # Verifica se ambos os arquivos existem
-    if not (os.path.exists(perf_csv) and os.path.exists(mon_csv)):
-        print(f"Arquivos CSV nao encontrados em {BASE_DIR}")
-        print(f"Esperado: {perf_csv} e {mon_csv}")
-        return
+def load_csvs(func_dir):
+    perf = os.path.join(func_dir, "caliper_performance_metrics.csv")
+    mon = os.path.join(func_dir, "caliper_monitor_metrics.csv")
 
-    # -------------------
-    # 1. Leitura dos dados
-    # -------------------
-    perf_df = pd.read_csv(perf_csv)
-    mon_df = pd.read_csv(mon_csv)
+    if not (os.path.isfile(perf) and os.path.isfile(mon)):
+        return None, None
 
-    # Converte colunas numéricas relevantes
-    num_cols_perf = [
-        "Send Rate (TPS)",
-        "Max Latency (s)",
-        "Min Latency (s)",
-        "Avg Latency (s)",
-        "Throughput (TPS)",
-        "TPS"
-    ]
-    for col in num_cols_perf:
-        if col in perf_df.columns:
-            perf_df[col] = pd.to_numeric(perf_df[col], errors="coerce")
+    return pd.read_csv(perf), pd.read_csv(mon)
 
-    # Colunas conhecidas do monitoramento
-    cpu_col = "CPU%(avg)"
-    mem_col_gb = "Memory(avg) [GB]"
-    mem_col_mb = "Memory(avg) [MB]"
 
-    # Converte tipos numéricos
-    for col in [cpu_col, mem_col_gb, mem_col_mb, "TPS"]:
-        if col in mon_df.columns:
-            mon_df[col] = pd.to_numeric(mon_df[col], errors="coerce")
+def normalize_monitor_df(mon_df):
+    # CPU
+    if "CPU%(avg)" in mon_df.columns:
+        mon_df["CPU"] = pd.to_numeric(mon_df["CPU%(avg)"], errors="coerce")
 
-    # Seleciona qual coluna de memória usar
-    if mem_col_gb in mon_df.columns and mon_df[mem_col_gb].notna().sum() > 0:
-        mon_df["Memory_used_GB"] = mon_df[mem_col_gb]
-    elif mem_col_mb in mon_df.columns and mon_df[mem_col_mb].notna().sum() > 0:
-        mon_df["Memory_used_GB"] = mon_df[mem_col_mb] / 1024
-    else:
-        print("Nenhuma coluna de memoria valida encontrada, pulando...\n")
-        return
+    # Memória
+    if "Memory(avg) [GB]" in mon_df.columns:
+        mon_df["Memory_GB"] = pd.to_numeric(mon_df["Memory(avg) [GB]"], errors="coerce")
+    elif "Memory(avg) [MB]" in mon_df.columns:
+        mon_df["Memory_GB"] = (
+            pd.to_numeric(mon_df["Memory(avg) [MB]"], errors="coerce") / 1024
+        )
 
-    # -------------------
-    # 2. Processar por função (Name)
-    # -------------------
-    print(f"\n{'='*60}")
-    print(f"Experimento: {os.path.basename(BASE_DIR)}")
-    print(f"{'='*60}\n")
+    return mon_df
 
-    # Processar cada função (open, query, transfer)
-    for func_name in perf_df['Name'].unique():
-        print(f"\nFuncao: {func_name.upper()}")
-        print("-" * 40)
 
-        # Filtrar dados dessa função
-        perf_func = perf_df[perf_df['Name'] == func_name]
+# =====================
+# Análise por experimento
+# =====================
 
-        if len(perf_func) == 0:
-            print(f"Sem dados para {func_name}")
+def analyze_experiment(exp_path):
+    exp_name = os.path.basename(exp_path)
+    print(f"\n{'='*80}")
+    print(f"EXPERIMENTO: {exp_name}")
+    print(f"{'='*80}")
+
+    results = []
+
+    for func in FUNCTIONS:
+        func_dir = os.path.join(exp_path, func)
+        if not os.path.isdir(func_dir):
             continue
 
-        # Mostrar métricas de performance
-        print("\nPerformance:")
-        for col in ["Send Rate (TPS)", "Throughput (TPS)", "Min Latency (s)", "Avg Latency (s)", "Max Latency (s)"]:
-            if col in perf_func.columns:
-                val = perf_func[col].iloc[0]
-                print(f"  {col}: {val:.4f}")
+        perf_df, mon_df = load_csvs(func_dir)
+        if perf_df is None:
+            print(f"  {func}: CSVs nao encontrados, pulando...")
+            continue
 
-        # Mostrar métricas de recursos
-        print("\nRecursos (media entre nodes):")
-        print(f"  CPU media: {mon_df[cpu_col].mean():.2f}%")
-        print(f"  CPU maxima: {mon_df[cpu_col].max():.2f}%")
-        print(f"  Memoria media: {mon_df['Memory_used_GB'].mean():.4f} GB")
-        print(f"  Memoria maxima: {mon_df['Memory_used_GB'].max():.4f} GB")
+        # Conversões numéricas
+        for col in [
+            "Send Rate (TPS)",
+            "Throughput (TPS)",
+            "Avg Latency (s)",
+            "Min Latency (s)",
+            "Max Latency (s)",
+            "TPS",
+        ]:
+            if col in perf_df.columns:
+                perf_df[col] = pd.to_numeric(perf_df[col], errors="coerce")
 
-        # Mostrar por nó
-        print(f"\nPor no:")
-        for _, row in mon_df.iterrows():
-            print(f"  {row['Name']}: CPU={row[cpu_col]:.2f}%, Mem={row['Memory_used_GB']:.4f}GB")
+        mon_df = normalize_monitor_df(mon_df)
+
+        print(f"\n▶ FUNCAO: {func.upper()}")
+        print("-" * 60)
+
+        for tps in sorted(perf_df["TPS"].unique()):
+            df_tps = perf_df[perf_df["TPS"] == tps]
+
+            throughput = df_tps["Throughput (TPS)"].mean()
+            latency = df_tps["Avg Latency (s)"].mean()
+
+            cpu_avg = mon_df["CPU"].mean()
+            cpu_max = mon_df["CPU"].max()
+            mem_avg = mon_df["Memory_GB"].mean()
+            mem_max = mon_df["Memory_GB"].max()
+
+            print(
+                f"TPS={tps:>4} | "
+                f"Throughput={throughput:8.2f} | "
+                f"Latency={latency:6.3f}s | "
+                f"CPU(avg/max)={cpu_avg:5.1f}/{cpu_max:5.1f}% | "
+                f"Mem(avg/max)={mem_avg:.3f}/{mem_max:.3f} GB"
+            )
+
+            results.append({
+                "Experiment": exp_name,
+                "Function": func,
+                "TPS": tps,
+                "Throughput_TPS": throughput,
+                "Avg_Latency_s": latency,
+                "CPU_avg_%": cpu_avg,
+                "CPU_max_%": cpu_max,
+                "Mem_avg_GB": mem_avg,
+                "Mem_max_GB": mem_max,
+            })
+
+    return pd.DataFrame(results) if results else None
+
+
+# =====================
+# Gráficos
+# =====================
+
+def plot_metrics(df, exp_name):
+    for func in df["Function"].unique():
+        df_f = df[df["Function"] == func].sort_values("TPS")
+
+        # Throughput
+        plt.figure()
+        plt.plot(df_f["TPS"], df_f["Throughput_TPS"], marker="o")
+        plt.xlabel("TPS configurado")
+        plt.ylabel("Throughput (TPS)")
+        plt.title(f"{exp_name} | {func.upper()} | Throughput")
+        plt.grid(True)
+        plt.savefig(f"{OUTPUT_DIR}/{exp_name}_{func}_throughput.png")
+        plt.close()
+
+        # Latência
+        plt.figure()
+        plt.plot(df_f["TPS"], df_f["Avg_Latency_s"], marker="o")
+        plt.xlabel("TPS configurado")
+        plt.ylabel("Latencia media (s)")
+        plt.title(f"{exp_name} | {func.upper()} | Latencia")
+        plt.grid(True)
+        plt.savefig(f"{OUTPUT_DIR}/{exp_name}_{func}_latency.png")
+        plt.close()
+
 
 # =====================
 # Execução principal
 # =====================
+
+def main():
+    experiments = []
+
+    if len(sys.argv) > 1:
+        exp = sys.argv[1]
+        path = os.path.join(EXPERIMENTS_BASE, exp)
+        if not os.path.isdir(path):
+            print(f"Experimento nao encontrado: {exp}")
+            sys.exit(1)
+        experiments.append(path)
+    else:
+        experiments = [
+            os.path.join(EXPERIMENTS_BASE, d)
+            for d in sorted(os.listdir(EXPERIMENTS_BASE))
+            if os.path.isdir(os.path.join(EXPERIMENTS_BASE, d))
+        ]
+
+    all_results = []
+
+    for exp in experiments:
+        df = analyze_experiment(exp)
+        if df is not None:
+            all_results.append(df)
+            plot_metrics(df, os.path.basename(exp))
+
+    if all_results:
+        final_df = pd.concat(all_results, ignore_index=True)
+        final_df.to_csv(f"{OUTPUT_DIR}/summary_all_experiments.csv", index=False)
+        print(f"\nResumo consolidado salvo em {OUTPUT_DIR}/summary_all_experiments.csv")
+
+    print("\nAnalise concluida com sucesso.")
+
+
 if __name__ == "__main__":
-    for exp_path in EXPERIMENTS_TO_PROCESS:
-        process_experiment(exp_path)
-        if len(EXPERIMENTS_TO_PROCESS) > 1:
-            print("\n" + "="*60 + "\n")
+    main()

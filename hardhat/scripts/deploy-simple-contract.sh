@@ -23,6 +23,12 @@ log_error() {
     echo -e "${RED}[DEPLOY ERROR]${NC} $1"
 }
 
+BLOCKTIME=${1:-5}
+if ! [[ "$BLOCKTIME" =~ ^[0-9]+$ ]] || [ "$BLOCKTIME" -lt 1 ]; then
+    log_error "Blocktime invalido recebido: $BLOCKTIME"
+    exit 1
+fi
+
 # Diretórios
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HARDHAT_DIR="$BASE_DIR/hardhat"
@@ -50,9 +56,14 @@ for i in {1..10}; do
     sleep 3
 done
 
-# Aguardar estabilização adicional
-log_info "Aguardando estabilização adicional (10 segundos)..."
-sleep 10
+if [ "$BLOCKTIME" -lt 10 ]; then
+    EXTRA_WAIT=10
+else
+    EXTRA_WAIT="$BLOCKTIME"
+fi
+
+log_info "Aguardando estabilização adicional (${EXTRA_WAIT} segundos)..."
+sleep "$EXTRA_WAIT"
 
 # Deploy do contrato Simple
 log_info "Implantando contrato Simple..."
@@ -60,7 +71,7 @@ log_info "Implantando contrato Simple..."
 # Executar deploy com Hardhat Ignition (modo não-interativo)
 # Usa 'yes' para responder automaticamente a todas as confirmações
 # O timeout garante que o yes seja interrompido após o deploy
-DEPLOY_OUTPUT=$(timeout 60 bash -c "yes | npx hardhat ignition deploy ./ignition/modules/Simple.ts --network local --reset" 2>&1)
+DEPLOY_OUTPUT=$(timeout 120 bash -c "yes | npx hardhat ignition deploy ./ignition/modules/Simple.ts --network local --reset" 2>&1)
 DEPLOY_EXIT_CODE=$?
 
 # Exit code 124 significa timeout (esperado), consideramos sucesso se deploy ocorreu

@@ -4,23 +4,23 @@
 # ==========================================
 
 # Baseline (configuracao atual)
-6 5 qbft 25.10.0
+#6 5 qbft 25.10.0
 
 # Variar numero de nos (mantendo outros parametros)
-4 5 qbft 25.10.0
-8 5 qbft 25.10.0
-10 5 qbft 25.10.0
+#4 5 qbft 25.10.0
+#8 5 qbft 25.10.0
+#10 5 qbft 25.10.0
 
 # Variar tempo de bloco (mantendo outros parametros)
-6 2 qbft 25.10.0
-6 10 qbft 25.10.0
+#6 2 qbft 25.10.0
+#6 10 qbft 25.10.0
 
 # Variar consenso (mantendo outros parametros)
-6 5 ibft 25.10.0
+#6 5 ibft 25.10.0
 
 # Variar versao Besu (mantendo outros parametros)
 # 6 5 qbft 25.9.0  # REMOVIDA - problemas com WebSocket
-6 5 qbft 24.7.0
+#6 5 qbft 24.7.0
 
 # ==========================================
 # Experimentos adicionais (opcional)
@@ -35,3 +35,27 @@
 # 10 10 qbft 25.10.0
 # 6 5 ibft 25.9.0
 # 6 5 ibft 24.7.0
+
+4 5 qbft 25.12.0
+6 5 qbft 25.12.0
+8 5 qbft 25.12.0
+
+4 5 ibft 25.12.0
+6 5 ibft 25.12.0
+8 5 ibft 25.12.0
+
+4 10 qbft 25.12.0
+6 10 qbft 25.12.0
+8 10 qbft 25.12.0
+
+4 10 ibft 25.12.0
+6 10 ibft 25.12.0
+8 10 ibft 25.12.0
+
+4 15 ibft 25.10.0
+4 15 qbft 25.10.0
+6 15 ibft 25.10.0
+6 15 qbft 25.10.0
+
+4 10 ibft 24.7.0
+4 10 qbft 24.7.0

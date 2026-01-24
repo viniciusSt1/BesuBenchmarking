@@ -30,13 +30,31 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+update_tps_in_yaml() {
+    local file="$1"
+    local tps="$2"
+
+    if ! grep -q "tps:" "$file"; then
+        log_error "Campo tps nao encontrado em $file"
+        return 1
+    fi
+
+    sed -i.bak -E "s/(tps:).*/\1 $tps/" "$file"
+}
+
+
+
 # ==========================================
 # 1. VALIDAR PARAMETROS
 # ==========================================
 
-if [ "$#" -ne 4 ]; then
-    log_error "Uso: $0 <nodes> <blocktime> <consensus> <version>"
-    log_error "Exemplo: $0 6 5 qbft 25.10.0"
+if [ "$#" -lt 4 ]; then
+    log_error "Uso: $0 <nodes> <blocktime> <consensus> <version> [opcoes]"
+    log_error "Exemplo:"
+    log_error "  $0 6 5 qbft 25.10.0 \\"
+    log_error "     --tps-open 160,180,200,220 \\"
+    log_error "     --tps-query 500,600,700,800 \\"
+    log_error "     --tps-transfer 100,110,120,130"
     exit 1
 fi
 
@@ -45,15 +63,26 @@ BLOCKTIME=$2
 CONSENSUS=$3
 VERSION=$4
 
-# Validar nodes (4, 6, 8, 10) ---> ajustar caso necessário
-if [[ ! "$NODES" =~ ^(4|6|8|10)$ ]]; then
-    log_error "Numero de nos invalido: $NODES. Use: 4, 6, 8 ou 10"
+shift 4
+
+DEFAULT_TPS_OPEN=(160 180 200 220)
+DEFAULT_TPS_QUERY=(500 600 700 800)
+DEFAULT_TPS_TRANSFER=(100 110 120 130)
+
+# Inicialmente usar defaults
+TPS_OPEN=("${DEFAULT_TPS_OPEN[@]}")
+TPS_QUERY=("${DEFAULT_TPS_QUERY[@]}")
+TPS_TRANSFER=("${DEFAULT_TPS_TRANSFER[@]}")
+
+# Validar número de nós (inteiro >= 1)
+if ! [[ "$NODES" =~ ^[0-9]+$ ]] || [ "$NODES" -lt 1 ]; then
+    log_error "Numero de nos invalido: $NODES. Use um inteiro >= 1"
     exit 1
 fi
 
-# Validar blocktime (2, 5, 10) ---> ajustar caso necessário
-if [[ ! "$BLOCKTIME" =~ ^(2|5|10)$ ]]; then
-    log_error "Tempo de bloco invalido: $BLOCKTIME. Use: 2, 5 ou 10"
+# Validar blocktime (inteiro >= 1 segundo)
+if ! [[ "$BLOCKTIME" =~ ^[0-9]+$ ]] || [ "$BLOCKTIME" -lt 1 ]; then
+    log_error "Tempo de bloco invalido: $BLOCKTIME. Use um inteiro >= 1 (segundos)"
     exit 1
 fi
 
@@ -64,9 +93,9 @@ if [[ ! "$CONSENSUS" =~ ^(qbft|ibft)$ ]]; then
 fi
 
 # Validar version ---> ajustar caso necessário
-if [[ ! "$VERSION" =~ ^(24\.7\.0|25\.9\.0|25\.10\.0)$ ]]; then
-    log_error "Versao invalida: $VERSION. Use: 24.7.0, 25.9.0 ou 25.10.0"
-    exit 1
+if [[ ! "$VERSION" =~ ^([1-9][0-9]*)\.[0-9]+\.[0-9]+$ ]]; then
+  log_error "Versão inválida: $VERSION. Use uma versão válida do Besu (ex: 24.7.0)"
+  exit 1
 fi
 
 EXP_NAME="${NODES}n-${BLOCKTIME}s-${CONSENSUS}-v${VERSION}"
@@ -223,18 +252,41 @@ fi
 GENESIS_TEMP="/tmp/genesis_temp_$$.json"
 cp "$GENESIS_TEMPLATE" "$GENESIS_TEMP"
 
-# Modificar blockperiodseconds usando jq ou sed
+if [ "$BLOCKTIME" -gt 10 ]; then
+    REQUEST_TIMEOUT=$(( BLOCKTIME * 2 ))
+else
+    REQUEST_TIMEOUT=10
+fi
+
+# Modificar blockperiodseconds e requesttimeoutseconds usando jq ou sed
 if command -v jq &> /dev/null; then
-    log_info "Modificando blockperiodseconds para ${BLOCKTIME}..."
+    log_info "Modificando blockperiodseconds para ${BLOCKTIME} e requesttimeoutseconds para ${REQUEST_TIMEOUT}..."
+
     if [ "$CONSENSUS" = "qbft" ]; then
-        jq ".genesis.config.qbft.blockperiodseconds = $BLOCKTIME | .blockchain.nodes.count = $NODES" "$GENESIS_TEMP" > "$GENESIS_TEMP.new"
+        jq "
+          .genesis.config.qbft.blockperiodseconds = $BLOCKTIME |
+          .genesis.config.qbft.requesttimeoutseconds = $REQUEST_TIMEOUT |
+          .blockchain.nodes.count = $NODES
+        " "$GENESIS_TEMP" > "$GENESIS_TEMP.new"
     else
-        jq ".genesis.config.ibft2.blockperiodseconds = $BLOCKTIME | .blockchain.nodes.count = $NODES" "$GENESIS_TEMP" > "$GENESIS_TEMP.new"
+        jq "
+          .genesis.config.ibft2.blockperiodseconds = $BLOCKTIME |
+          .genesis.config.ibft2.requesttimeoutseconds = $REQUEST_TIMEOUT |
+          .blockchain.nodes.count = $NODES
+        " "$GENESIS_TEMP" > "$GENESIS_TEMP.new"
     fi
+
     mv "$GENESIS_TEMP.new" "$GENESIS_TEMP"
 else
     log_warning "jq nao encontrado, usando sed..."
+
+    # blockperiodseconds
     sed -i "s/\"blockperiodseconds\": [0-9]*/\"blockperiodseconds\": $BLOCKTIME/" "$GENESIS_TEMP"
+
+    # requesttimeoutseconds
+    sed -i "s/\"requesttimeoutseconds\": [0-9]*/\"requesttimeoutseconds\": $REQUEST_TIMEOUT/" "$GENESIS_TEMP"
+
+    # numero de nós
     sed -i "s/\"count\": [0-9]*/\"count\": $NODES/" "$GENESIS_TEMP"
 fi
 
@@ -352,6 +404,8 @@ log_info "Verificando se precisa fazer build da imagem..."
 if ! docker images | grep -q "besu-image-local.*$VERSION"; then
     log_info "Fazendo build da imagem besu-image-local:$VERSION..."
 
+    cd ..
+
     # Criar Dockerfile temporario
     cat > Dockerfile.temp <<EOF
 FROM ubuntu:22.04
@@ -368,10 +422,14 @@ WORKDIR /opt/besu
 ENTRYPOINT ["/opt/besu/bin/besu"]
 EOF
 
-    docker build -t "besu-image-local:$VERSION" -f Dockerfile.temp . 2>&1 | grep -E "(Step|Successfully)" || true
+    docker build -t "besu-image-local:$VERSION" -f Dockerfile.temp .
+
     rm Dockerfile.temp
 
     log_success "Imagem Docker criada"
+
+    cd scripts
+
 else
     log_success "Imagem besu-image-local:$VERSION ja existe"
 fi
@@ -422,7 +480,7 @@ done
 # ==========================================
 
 log_info "Implantando contrato Simple na rede..."
-bash "$BASE_DIR/hardhat/scripts/deploy-simple-contract.sh"
+bash "$BASE_DIR/hardhat/scripts/deploy-simple-contract.sh" "$BLOCKTIME"
 
 if [ $? -ne 0 ]; then
     log_error "Falha ao implantar contrato Simple"
@@ -455,58 +513,74 @@ done
 log_success "YAMLs atualizados para $NODES nos"
 
 # ==========================================
-# 14. EXECUTAR CALIPER
+# 14. EXECUTAR CALIPER (COM TPS AUTOMATICO)
 # ==========================================
 
-log_info "Executando Caliper..."
+log_info "Executando Caliper com TPS variavel..."
 cd "$CALIPER_DIR"
 
-# Criar diretorios de resultados
 mkdir -p "$RESULTS_HTML"
 mkdir -p "$RESULTS_CSV"
 
-# Executar benchmark Simple
-log_info "Executando benchmark Simple (open, query, transfer)..."
-
 for BENCHMARK in open query transfer; do
-    log_info "  Executando: $BENCHMARK..."
-
     BENCHMARK_FILE="benchmarks/scenario-monitoring/Simple/config-${BENCHMARK}.yaml"
 
     if [ ! -f "$BENCHMARK_FILE" ]; then
-        log_warning "  Benchmark $BENCHMARK_FILE nao encontrado, pulando..."
+        log_warning "Benchmark $BENCHMARK_FILE nao encontrado, pulando..."
         continue
     fi
 
-    # Executar com timeout de 10 minutos (600 segundos)
-    timeout 600 npx caliper launch manager \
-        --caliper-workspace ./ \
-        --caliper-benchconfig "$BENCHMARK_FILE" \
-        --caliper-networkconfig networks/besu/networkconfig.json \
-        --caliper-bind-sut besu:latest \
-        --caliper-flow-skip-install \
-        > "$RESULTS_HTML/${BENCHMARK}.log" 2>&1
+    # Selecionar lista de TPS
+    case "$BENCHMARK" in
+        open)     TPS_LIST=("${TPS_OPEN[@]}") ;;
+        query)    TPS_LIST=("${TPS_QUERY[@]}") ;;
+        transfer) TPS_LIST=("${TPS_TRANSFER[@]}") ;;
+    esac
 
-    EXIT_CODE=$?
+    BENCHMARK_DIR="$RESULTS_HTML/$BENCHMARK"
+    mkdir -p "$BENCHMARK_DIR"
 
-    if [ $EXIT_CODE -eq 124 ]; then
-        log_warning "  Benchmark $BENCHMARK atingiu timeout de 10 minutos"
-    elif [ $EXIT_CODE -ne 0 ]; then
-        log_warning "  Benchmark $BENCHMARK falhou com codigo $EXIT_CODE"
-    else
-        log_success "  Benchmark $BENCHMARK concluido"
-    fi
+    log_info "Benchmark: $BENCHMARK | TPS: ${TPS_LIST[*]}"
 
-    # Mover report.html
-    if [ -f "report.html" ]; then
-        mv report.html "$RESULTS_HTML/${BENCHMARK}_report.html"
-        log_success "  Report HTML salvo: $RESULTS_HTML/${BENCHMARK}_report.html"
-    fi
+    for TPS in "${TPS_LIST[@]}"; do
+        log_info "  Executando $BENCHMARK @ ${TPS} TPS"
 
-    sleep 5
+        update_tps_in_yaml "$BENCHMARK_FILE" "$TPS"
+
+        EXP_TAG="${BENCHMARK}_tps${TPS}"
+        LOG_FILE="$BENCHMARK_DIR/${EXP_TAG}.log"
+        REPORT_FILE="$BENCHMARK_DIR/${EXP_TAG}.html"
+
+        timeout 600 npx caliper launch manager \
+            --caliper-workspace ./ \
+            --caliper-benchconfig "$BENCHMARK_FILE" \
+            --caliper-networkconfig networks/besu/networkconfig.json \
+            --caliper-bind-sut besu:latest \
+            --caliper-flow-skip-install \
+            > "$LOG_FILE" 2>&1
+
+        EXIT_CODE=$?
+
+        if [ $EXIT_CODE -eq 124 ]; then
+            log_warning "  Timeout em $BENCHMARK @ $TPS TPS"
+        elif [ $EXIT_CODE -ne 0 ]; then
+            log_warning "  Falha em $BENCHMARK @ $TPS TPS (code $EXIT_CODE)"
+        else
+            log_success "  Concluido: $BENCHMARK @ $TPS TPS"
+        fi
+
+        if [ -f "report.html" ]; then
+            mv report.html "$REPORT_FILE"
+            log_success "  Report salvo: $REPORT_FILE"
+        else
+            log_warning "  Report nao encontrado para $BENCHMARK @ $TPS TPS"
+        fi
+
+        sleep 5
+    done
 done
 
-log_success "Caliper executado"
+log_success "Caliper executado para todos TPS"
 
 # ==========================================
 # 15. EXTRAIR CSVs

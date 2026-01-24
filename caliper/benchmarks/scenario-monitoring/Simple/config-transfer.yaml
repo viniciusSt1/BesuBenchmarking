@@ -17,7 +17,7 @@ test:
       rateControl:
         type: fixed-rate
         opts:
-          tps: 110
+          tps: 130
       workload:
         module: benchmarks/scenario-monitoring/Simple/transfer.js
         arguments:

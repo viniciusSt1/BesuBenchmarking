@@ -1,9 +1,13 @@
+Projeto de benchmark automatizado para redes Hyperledger Besu, utilizando Hyperledger Caliper para avaliar desempenho (TPS, latência e uso de recursos) do contrato Simple.
+Os testes executam cargas controladas sobre as funções do contrato, sob diferentes redes besu, conforme o benchmark oficial do Caliper disponível em: https://github.com/hyperledger-caliper/caliper-benchmarks/blob/v0.6.0/src/ethereum/simple/simple.sol
+
 ## Requisitos
 
 - Ambiente Linux
 - Node.js 18+ (recomendado 20+)
 - Docker e Docker Compose
 - Python 3.8+
+- Pandas, Mathplotlib e BeautifulSoup
 - jq (JSON processor)
 - wget, curl, git
 

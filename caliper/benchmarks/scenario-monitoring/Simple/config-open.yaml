@@ -19,7 +19,7 @@ test:
       rateControl:
         type: fixed-rate
         opts:
-          tps: 180
+          tps: 220
       workload:
         module: benchmarks/scenario-monitoring/Simple/open.js
         arguments: *simple-args
